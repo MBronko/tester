@@ -17,6 +17,8 @@ args = vars(parser.parse_args())
 exec_path = os.path.join(args['dir'], args['exec'])
 compile_command = f"g++ {args['src']} -o {args['exec']}"
 
+cat_cmd = 'type' if os.name == 'nt' else 'cat'
+
 if os.path.isfile(exec_path):
     os.remove(exec_path)
 
@@ -30,7 +32,7 @@ failed = 0
 
 for in_name, out_name in get_test_names(args['testdir']):
     test_path = os.path.join(args['testdir'], in_name)
-    command = f"cat {test_path} | {exec_path}"
+    command = f"{cat_cmd} {test_path} | {exec_path}"
 
     result = os.popen(command).read().strip()
 
