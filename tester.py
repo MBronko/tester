@@ -16,6 +16,7 @@ parser.add_argument('-f', '--flags', default='-std=gnu++17 -O2 -static')
 parser.add_argument('-s', '--silent', default=False, action=argparse.BooleanOptionalAction)
 parser.add_argument('--compile', default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument('-w', '--warnings', default=False, action=argparse.BooleanOptionalAction)
+parser.add_argument('--override', default=False, action=argparse.BooleanOptionalAction)
 
 args = vars(parser.parse_args())
 
@@ -50,6 +51,15 @@ for in_name, out_name in get_test_names(args['testdir']):
 
     result = os.popen(command).read().strip()
 
+    if args['override']:
+        out_name = os.path.splitext(in_name)[0] + '.out'
+
+        print(f'Saving result of {in_name} to {out_name}')
+
+        with open(os.path.join(args['testdir'], out_name), 'w') as out_file:
+            out_file.write(result)
+        continue
+
     if out_name:
         with open(os.path.join(args['testdir'], out_name)) as out_file:
             expected_output = out_file.read().strip()
@@ -76,7 +86,7 @@ for in_name, out_name in get_test_names(args['testdir']):
 
     print('------------------------------------------')
 
-if not args['silent']:
+if not args['silent'] and not args['override']:
     print(f'Passed: {passed}')
     print(f'Failed: {failed}')
     print(f'Total: {passed + failed}')
