@@ -4,6 +4,7 @@ import os
 import sys
 from test_names import get_test_names
 import argparse
+from subprocess import Popen, PIPE
 
 parser = argparse.ArgumentParser()
 
@@ -24,19 +25,16 @@ exec_path = os.path.join(args['dir'], args['exec'])
 warnings = '-Wall -Wextra -Wshadow' if args['warnings'] else '-w'
 compile_command = f"{args['compiler']} {args['flags']} {warnings} -o {args['exec']} {args['src']}"
 
-cat_cmd = 'type' if os.name == 'nt' else 'cat'
-
 if args['compile']:
     if os.path.isfile(exec_path):
         os.remove(exec_path)
 
     print(f'Compiling with: {compile_command}\n')
 
-    os.popen(compile_command).read()
+    p = Popen(compile_command, shell=True)
+    p.wait()
 
-    print()
-
-    if not os.path.isfile(exec_path):
+    if p.returncode:
         exit(1)
 elif not os.path.isfile(exec_path):
     print('Cant find executable file')
@@ -47,43 +45,50 @@ failed = 0
 
 for in_name, out_name in get_test_names(args['testdir']):
     test_path = os.path.join(args['testdir'], in_name)
-    command = f"{cat_cmd} {test_path} | {exec_path}"
 
-    result = os.popen(command).read().strip()
+    with open(test_path, 'rb') as in_file:
+        p = Popen(exec_path, stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+        stdout, stderr = p.communicate(input=in_file.read())
 
-    if args['override']:
+    error = stderr.decode('utf-8')
+    output = stdout.decode('utf-8').strip()
+    returncode = p.returncode
+
+    if args['override'] and not returncode:
         out_name = os.path.splitext(in_name)[0] + '.out'
 
         print(f'Saving result of {in_name} to {out_name}')
 
-        with open(os.path.join(args['testdir'], out_name), 'w') as out_file:
-            out_file.write(result)
+        with open(os.path.join(args['testdir'], out_name), 'wb') as out_file:
+            out_file.write(stdout)
         continue
 
+    test_case_header = f'Test {in_name}'
+    test_case_msg = ''
+
     if out_name:
-        with open(os.path.join(args['testdir'], out_name)) as out_file:
+        with open(os.path.join(args['testdir'], out_name), 'r') as out_file:
             expected_output = out_file.read().strip()
 
-            if result == expected_output:
+            if output == expected_output:
                 passed += 1
-                print(f'Test {in_name} PASSED')
+                test_case_header += ' PASSED'
             else:
                 failed += 1
-                print(f'Test {in_name} FAILED')
+                test_case_header += ' FAILED\n'
 
                 if args['silent']:
-                    print('Result:')
+                    test_case_msg = f'Result:\n{output}'
                 else:
-                    print('Expected:')
-                    print(expected_output)
-                    print('Got:')
-
-                print(result)
+                    test_case_msg = f'Expected:\n{expected_output}\nGot:\n{output}'
     else:
-        print(f'Test {in_name}')
-        print('Result:')
-        print(result)
+        test_case_header += '\n'
+        test_case_msg = f'Result:\n{output}'
 
+    if error:
+        error = f'\nError: {error}\n'
+
+    print(test_case_header + error + test_case_msg)
     print('------------------------------------------')
 
 if not args['silent'] and not args['override']:
